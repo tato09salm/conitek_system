@@ -320,7 +320,16 @@ with st.expander("➕ Nuevo Registro", expanded=False):
         dni = col1.text_input("DNI *", max_chars=8)
         nombre = col2.text_input("Nombre Completo *")
         email = col1.text_input("Correo Electrónico *")
-        universidad = col2.text_input("Universidad / Institución")
+        UNIVERSIDADES = [
+            "", "UNT", "UPAO", "UPC", "UPN", "UNSAC", "PUC",
+            # Trujillo / La Libertad
+            "UNITRU", "UCV", "USS", "UPAO", "ULADECH", "UNS",
+            # Nacionales
+            "UNMSM", "UNI", "PUCP", "UNFV", "UNSA", "UNAP",
+            "Otra"
+        ]
+        universidad = col2.selectbox("Universidad / Institución", UNIVERSIDADES)
+
         telefono = col1.text_input("Teléfono", max_chars=15)
         tipo = col1.selectbox("Tipo", [t.value for t in ParticipantType])
         modalidad = col2.selectbox("Modalidad", [m.value for m in Modality])
@@ -558,9 +567,10 @@ if participants:
     
     # Filtros
     st.markdown('<div class="filter-section">', unsafe_allow_html=True)
-    col_search, col_tipo, col_mod = st.columns([2, 1, 1])
+    col_search, col_univ, col_tipo, col_mod = st.columns([2, 1.5, 1, 1])
     
     filtro = col_search.text_input("🔍 Buscar", placeholder="DNI, Nombre, Email")
+    univ_filter = col_univ.selectbox("🏛️ Universidad", ["Todas"] + sorted(df["Universidad"].dropna().unique().tolist()))
     tipo_filter = col_tipo.multiselect("Tipo", options=[t.value for t in ParticipantType])
     mod_filter = col_mod.multiselect("Modalidad", options=[m.value for m in Modality])
     st.markdown('</div>', unsafe_allow_html=True)
@@ -575,6 +585,9 @@ if participants:
                      f in str(r["Email"]).lower(), 
             axis=1
         )]
+    ##agregue
+    if univ_filter and univ_filter != "Todas":
+        df_view = df_view[df_view["Universidad"] == univ_filter]
     if tipo_filter:
         df_view = df_view[df_view["Tipo"].isin(tipo_filter)]
     if mod_filter:

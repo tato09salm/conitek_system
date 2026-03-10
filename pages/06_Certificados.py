@@ -232,8 +232,16 @@ if role in ("admin", "administrador"):
     all_events = db.query(Event).all()
     db.close()
     if all_events:
+        UNIVERSIDADES = [
+            "Todas",
+            "UNT", "UPAO", "UPC", "UPN", "UCV", "USS", "ULADECH",
+            "UNITRU", "UNS", "UNMSM", "UNI", "PUCP", "UNFV",
+            "UNSA", "UNAP", "UNSAC", "PUC", "UNP", "Otra"
+        ]
         ev_opt = {f"{e.name} ({e.event_date})": e.id for e in all_events}
         ev_label = st.selectbox("Evento a certificar", list(ev_opt.keys()))
+        univ_cert_filter = st.selectbox("🏛️ Filtrar por Universidad", UNIVERSIDADES)
+
         if st.button("Generar PDF de todos"):
             sel_id = ev_opt[ev_label]
             db = SessionLocal()
@@ -245,6 +253,10 @@ if role in ("admin", "administrador"):
                     p = db.query(Participant).get(r.participant_id)
                     e = db.query(Event).get(sel_id)
                     if p and e:
+                        # FILTRO POR UNIVERSIDAD
+                        if univ_cert_filter != "Todas":
+                            if (p.university or "").strip().upper() != univ_cert_filter.strip().upper():
+                                continue
                         persons.append((p, e))
             db.close()
             if not persons:
@@ -368,6 +380,12 @@ if role in ("admin", "administrador"):
                             pretty_date = str(e.event_date)
                         combined.multi_cell(190,8,f"Por su participación en el evento {e.name},\nrealizado en {e.location} el {pretty_date}.",align='C')
                 pdf_bytes = bytes(combined.output(dest='S'))
-                st.download_button("Descargar Certificados del Evento (PDF)", data=pdf_bytes, file_name="certificados_evento.pdf", mime="application/pdf")
+                suffix = f"_{univ_cert_filter}" if univ_cert_filter != "Todas" else "_todos"
+                st.download_button(
+                    f"⬇️ Descargar Certificados ({univ_cert_filter}) — {len(persons)} participantes",
+                    data=pdf_bytes,
+                    file_name=f"certificados_evento{suffix}.pdf",
+                    mime="application/pdf"
+                )
 #else:
     #st.info("Solo el administrador puede generar certificados masivos por evento.")
