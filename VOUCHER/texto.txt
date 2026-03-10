@@ -1,0 +1,22 @@
+quiero hacer un programa que al entregarle una imagen de un vouecher puda editar algunos parametros.
+
+te pasare una imagen del modelo del voucher .
+lo que esta en XXX debe estar en blanco y se debe de cambiar luego 
+
+el encabezado debe ser igual.
+
+UNIVERSIDAD NACIONAL DE TRUJILLO 
+DIRECCION DE TESORERIA
+AREA DE GESTION DE INGRESOS
+DIEGO DE ALMAGRO N° 334-TRUJILLO-PERU
+R.UC. 20172557628
+RECIBO DE CAJA
+                                                   XXXX- XX-X   //esto  cambia (AA)
+
+TASA  :233 VENT:4      CTA.IP:125 .09.11  .80.02       SIAF:133.925
+FECHA  :     XX/XX/XXXX    HORA :  XX:XX:XX      S/.180.00
+HE RECIBIDO DE : LOPEZ MALCA STIVEN ADRIAN CARNET: 1023300123
+LA SUMA DE :     CIENTO OCHENTA Y 00/100 NUEVOS SOLES
+POR CONCEPTO DE: 
+      SERVICIOS ORDINARIOS-COMEDOR UNIVERSITARIO
+SERIE N°1                                                                                         XXXXXXX       //ESTO  cambia(AA)
