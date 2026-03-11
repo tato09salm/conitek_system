@@ -1,5 +1,7 @@
 from PIL import Image, ImageDraw, ImageFont
 from dataclasses import dataclass
+import qrcode
+import urllib.parse
 
 @dataclass
 class VoucherData:
@@ -120,6 +122,32 @@ def generar_voucher(datos: VoucherData) -> Image.Image:
     draw.text((80, y_pos), f"      {datos.concepto}", 
               fill=negro, font=font_datos)
     
+    # ===== QR DE VERIFICACIÓN =====
+    params = urllib.parse.urlencode({
+        "recibo": datos.numero_recibo,
+        "serie": datos.serie,
+        "monto": datos.monto
+    })
+    url_verificacion = f"https://conitek2026.unt.edu.pe/verificar?{params}"
+
+    qr = qrcode.QRCode(
+        version=2,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=5,
+        border=2,
+    )
+    qr.add_data(url_verificacion)
+    qr.make(fit=True)
+    qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+    qr_img = qr_img.resize((155, 155), Image.LANCZOS)
+
+    qr_x, qr_y = 930, 645
+    img.paste(qr_img, (qr_x, qr_y))
+
+    # Etiqueta encima del QR
+    draw.text((qr_x + 77, qr_y - 18), "VERIFICAR PAGO",
+              fill=verde_unt, font=font_serie_text, anchor="mm")
+
     # ===== SERIE =====
     # Serie N° 1 (abajo izquierda)
     draw.text((80, 820), "Serie N° 1", 

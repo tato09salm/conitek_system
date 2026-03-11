@@ -6,6 +6,7 @@ import os
 from io import BytesIO
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
+import qrcode
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -601,6 +602,32 @@ class ReportService:
         y += 40
         concepto = f"Pago por {info.get('method','-')} - {evento}"
         dr.text((80, y), f"      {consepto if (consepto:=concepto) else concepto}", fill=negro, font=fdat)
+        # ===== QR DE VERIFICACIÓN =====
+        # Datos embebidos directamente en el QR (funciona sin internet/servidor)
+        qr_content = (
+            f"CONITEK 2026 - PAGO VERIFICADO\n"
+            f"Recibo : {str(info.get('reference', '') or info.get('receipt_no', ''))}\n"
+            f"Participante: {info.get('participant_name', '-')}\n"
+            f"DNI  : {info.get('dni', '-')}\n"
+            f"Monto: S/. {float(info.get('amount', 0)):.2f}\n"
+            f"Metodo: {info.get('method', '-')}\n"
+            f"Fecha: {fecha}"
+        )
+        qr = qrcode.QRCode(
+            version=2,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=5,
+            border=2,
+        )
+        qr.add_data(qr_content)
+        qr.make(fit=True)
+        qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+        qr_img = qr_img.resize((155, 155), Image.LANCZOS)
+        qr_x, qr_y = 930, 645
+        img.paste(qr_img, (qr_x, qr_y))
+        dr.text((qr_x + 77, qr_y - 18), "VERIFICAR PAGO",
+                fill=verde, font=fserien, anchor="mm")
+        # ===== SERIE =====
         dr.text((80, 820), "Serie N° 1", fill=verde, font=fserien)
         # Mostrar REG-[ID] en la parte inferior derecha
         rec_id = str(info.get("receipt_no", "")).strip()
@@ -613,10 +640,13 @@ class ReportService:
         os.makedirs(Config.REPORTS_DIR, exist_ok=True)
         tmp = os.path.join(Config.REPORTS_DIR, f"voucher_{datetime.now().strftime('%Y%m%d%H%M%S%f')}.png")
         img.save(tmp, "PNG")
-        pdf = FPDF()
+        # Ajustar el tamaño del PDF al aspecto real de la imagen (1200x900)
+        # para evitar distorsión del QR y del resto del contenido
+        pdf_w, pdf_h = 210, round(210 * h / w, 2)  # 210 x 157.5 mm
+        pdf = FPDF(format=(pdf_w, pdf_h))
         pdf.set_auto_page_break(auto=False)
         pdf.add_page()
-        pdf.image(tmp, x=0, y=0, w=210, h=297)
+        pdf.image(tmp, x=0, y=0, w=pdf_w, h=pdf_h)
         return bytes(pdf.output(dest='S'))
 
 def download_button_excel(df, filename, label="Descargar Excel"):
