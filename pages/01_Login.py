@@ -317,10 +317,12 @@ with col1:
         unsafe_allow_html=True
     )
     st.markdown('<div class="image-wrapper">', unsafe_allow_html=True)
-    src = defaults.get("image_path") or defaults.get("image_url")
-    if src and os.path.isfile(src):
-        st.image(src, use_container_width=True)
-    else:
+    image_path = defaults.get("image_path", "")
+    # Resolver ruta relativa respecto a ASSETS_DIR
+    if image_path and not os.path.isabs(image_path):
+        image_path = os.path.join(Config.ASSETS_DIR, image_path)
+    src = image_path if (image_path and os.path.isfile(image_path)) else defaults.get("image_url", "")
+    if src:
         st.image(src, use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
     st.markdown(
@@ -362,7 +364,7 @@ with col2:
 
                     if user:
                         try:
-                            log_event(usuario=user.username, accion="LOGIN", tabla="users", registro_id=user.id, detalle="Inicio de sesión")
+                            log_event(usuario=user.username, accion="LOGIN", tabla="users", registro_id=user.id, detalle=f"Inicio de sesión | Rol: {user.role}")
                         except Exception:
                             pass
                         st.session_state["user"] = user.username

@@ -7,6 +7,91 @@ from io import BytesIO
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Helpers compartidos por todos los constructores de PDF
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _safe(text) -> str:
+    """Convierte texto arbitrario a cadena segura para Latin-1 (codificación FPDF)."""
+    if text is None:
+        return ""
+    s = str(text)
+    replacements = {
+        "\u2026": "...", "\u2014": "-", "\u2013": "-",
+        "\u201c": '"',  "\u201d": '"',
+        "\u2018": "'",  "\u2019": "'",
+    }
+    for k, v in replacements.items():
+        s = s.replace(k, v)
+    try:
+        s.encode("latin-1")
+        return s
+    except UnicodeEncodeError:
+        return s.encode("latin-1", "ignore").decode("latin-1")
+
+
+class _BrandedPDF(FPDF):
+    """PDF con encabezado y pie de página institucionales UNT/CONITEK."""
+
+    # Paleta UNT
+    NAVY   = (0,   0,   128)
+    GOLD   = (255, 215,   0)
+    WHITE  = (255, 255, 255)
+    LGRAY  = (238, 244, 255)   # fila alterna
+    DKGRAY = (80,  80,   80)
+    ROWBDR = (200, 210, 228)   # borde suave entre filas
+
+    def __init__(self, report_title: str, orientation: str = "L"):
+        super().__init__(orientation=orientation, unit="mm", format="A4")
+        self._report_title = report_title
+        self._gen_date = datetime.now().strftime("%d/%m/%Y  %H:%M")
+        self.set_auto_page_break(auto=True, margin=14)
+        self.set_margins(10, 30, 10)
+
+    def header(self):
+        # Banda navy de fondo
+        self.set_fill_color(*self.NAVY)
+        self.rect(0, 0, self.w, 27, "F")
+        # Línea dorada inferior de la banda
+        self.set_draw_color(*self.GOLD)
+        self.set_line_width(0.8)
+        self.line(0, 26.5, self.w, 26.5)
+        self.set_line_width(0.2)
+        # Nombre del congreso (dorado, pequeño)
+        self.set_xy(10, 2)
+        self.set_font("Arial", "B", 7)
+        self.set_text_color(*self.GOLD)
+        self.cell(self.w - 20, 5, _safe(Config.CONGRESS_NAME), align="C")
+        # Título del reporte (blanco, prominente)
+        self.set_xy(10, 9)
+        self.set_font("Arial", "B", 13)
+        self.set_text_color(*self.WHITE)
+        self.cell(self.w - 20, 8, _safe(self._report_title), align="C")
+        # Fecha generación (gris claro, pequeño)
+        self.set_xy(self.w - 65, 19)
+        self.set_font("Arial", "", 6.5)
+        self.set_text_color(190, 210, 255)
+        self.cell(55, 5, _safe(f"Generado: {self._gen_date}"), align="R")
+        # Restaurar defaults
+        self.set_text_color(0, 0, 0)
+        self.set_draw_color(0, 0, 0)
+
+    def footer(self):
+        self.set_y(-10)
+        self.set_draw_color(*self.NAVY)
+        self.set_line_width(0.35)
+        self.line(10, self.get_y(), self.w - 10, self.get_y())
+        self.ln(1)
+        self.set_font("Arial", "", 7)
+        self.set_text_color(*self.DKGRAY)
+        self.cell((self.w - 20) / 2, 5, _safe(Config.LOCATION), align="L")
+        self.cell(0, 5, _safe(f"Pagina  {self.page_no()}"), align="R")
+        self.set_text_color(0, 0, 0)
+        self.set_line_width(0.2)
+        self.set_draw_color(0, 0, 0)
+
+
 class ReportService:
     @staticmethod
     def generate_excel(data, filename, headers=None):
@@ -115,105 +200,174 @@ class ReportService:
     
     @staticmethod
     def data_to_pdf_bytes(data, title="Reporte"):
-        pdf = FPDF(orientation='L', unit='mm', format='A4')
-        pdf.set_auto_page_break(auto=True, margin=12)
-        pdf.add_page()
-        pdf.set_font("Arial", 'B', 16)
-        pdf.cell(0, 10, title, ln=True, align='C')
-        pdf.set_font("Arial", size=10)
-        pdf.ln(6)
-        #pdf.cell(0, 8, f"Generado por: {Config.CONGRESS_NAME}", ln=True)
-        pdf.ln(4)
-        if not data:
-            return bytes(pdf.output(dest='S'))
-        headers = list(data[0].keys())
-        # Calcular anchos por contenido
-        pdf.set_font("Arial", size=10)
-        padding = 4
-        max_width = pdf.w - 20  # ancho útil considerando márgenes
-        content_widths = []
-        for h in headers:
-            max_str = len(str(h))
-            for row in data:
-                max_str = max(max_str, len(str(row.get(h, ""))))
-            # Estimación de ancho por caracteres
-            w = min(max(pdf.get_string_width("W") * max_str + padding, 24), 95)
-            content_widths.append(w)
-        total = sum(content_widths)
-        if total > max_width:
-            scale = max_width / total
-            content_widths = [w * scale for w in content_widths]
-        # Encabezados
-        pdf.set_fill_color(200, 220, 255)
-        pdf.set_font("Arial", 'B', 10)
-        x0 = pdf.get_x()
-        for w, htxt in zip(content_widths, headers):
-            pdf.cell(w, 8, str(htxt), border=1, fill=True, align='L')
-        pdf.ln()
-        # Filas con ajuste de texto
-        pdf.set_font("Arial", size=10)
-        line_h = 6
-        def wrap_text(txt, width):
-            s = str(txt)
-            if " " not in s:
-                return [s]
-            words = s.split(" ")
+        """Genera PDF con diseño institucional UNT/CONITEK (tabla con encabezados navy/dorado,
+        filas alternas, pie de página con número de hoja)."""
+
+        def _wrap(txt, cell_w, pdf_obj):
+            s = _safe(txt)
+            words = s.split()
+            if not words:
+                return [""]
             lines, cur = [], ""
-            for w in words:
-                test = (cur + " " + w).strip()
-                if pdf.get_string_width(test) + padding <= width:
+            for word in words:
+                test = (cur + " " + word).strip()
+                if pdf_obj.get_string_width(test) + 5 <= cell_w:
                     cur = test
                 else:
                     if cur:
                         lines.append(cur)
-                        cur = w
-                    else:
-                        # palabra más larga que el ancho: agréguela como una sola línea y continúe
-                        lines.append(w)
-                        cur = ""
+                    cur = word
             if cur:
                 lines.append(cur)
             return lines or [""]
-        for row in data:
-            # Calcular altura máxima de la fila
-            cell_lines = []
-            for w, h in zip(content_widths, headers):
-                lines = wrap_text(row.get(h, ""), w)
-                cell_lines.append(lines)
-            max_lines = max(len(lines) for lines in cell_lines)
+
+        def _draw_col_headers(pdf_obj, col_widths, headers, x0):
+            pdf_obj.set_fill_color(*_BrandedPDF.NAVY)
+            pdf_obj.set_text_color(*_BrandedPDF.WHITE)
+            pdf_obj.set_font("Arial", "B", 8)
+            pdf_obj.set_xy(x0, pdf_obj.get_y())
+            for cw, h in zip(col_widths, headers):
+                pdf_obj.cell(cw, 8, _safe(str(h)), border=0, fill=True, align="C")
+            pdf_obj.ln()
+            # Línea dorada bajo los encabezados
+            pdf_obj.set_draw_color(*_BrandedPDF.GOLD)
+            pdf_obj.set_line_width(0.7)
+            pdf_obj.line(x0, pdf_obj.get_y(), x0 + sum(col_widths), pdf_obj.get_y())
+            pdf_obj.set_line_width(0.2)
+            pdf_obj.set_draw_color(*_BrandedPDF.ROWBDR)
+            pdf_obj.set_text_color(0, 0, 0)
+
+        pdf = _BrandedPDF(report_title=title, orientation="L")
+        pdf.add_page()
+
+        if not data:
+            pdf.set_font("Arial", "I", 10)
+            pdf.set_text_color(80, 80, 80)
+            pdf.cell(0, 10, "Sin datos para mostrar.", ln=True, align="C")
+            return bytes(pdf.output(dest="S"))
+
+        headers = list(data[0].keys())
+        x0 = pdf.l_margin
+        max_width = pdf.w - pdf.l_margin - pdf.r_margin
+
+        # ── Calcular anchos de columna ──────────────────────────────────────
+        pdf.set_font("Arial", "", 8)
+        col_widths = []
+        for h in headers:
+            max_chars = min(len(str(h)), 35)
+            for row in data:
+                max_chars = max(max_chars, min(len(str(row.get(h, ""))), 35))
+            w = max(pdf.get_string_width("W") * max_chars + 6, 18)
+            col_widths.append(w)
+        total = sum(col_widths)
+        if total > max_width:
+            scale = max_width / total
+            col_widths = [w * scale for w in col_widths]
+
+        # ── Encabezados de columna ──────────────────────────────────────────
+        _draw_col_headers(pdf, col_widths, headers, x0)
+
+        # ── Filas de datos ──────────────────────────────────────────────────
+        line_h = 5
+        pdf.set_font("Arial", "", 8)
+
+        for row_idx, row in enumerate(data):
+            cell_lines = [_wrap(row.get(h, ""), cw, pdf)
+                          for cw, h in zip(col_widths, headers)]
+            max_lines = max(len(l) for l in cell_lines)
             row_h = line_h * max_lines
-            # Dibujar celdas
-            x = x0
-            y = pdf.get_y()
-            for w, lines in zip(content_widths, cell_lines):
-                if len(lines) < max_lines:
-                    lines = lines + [""] * (max_lines - len(lines))
-                pdf.set_xy(x, y)
-                # Dibujar borde de la celda
-                pdf.multi_cell(w, line_h, "\n".join(lines), border=1, align='L')
-                x += w
+
+            # Salto de página anticipado con re-impresión de cabeceras
+            if pdf.get_y() + row_h > pdf.h - 14:
+                pdf.add_page()
+                _draw_col_headers(pdf, col_widths, headers, x0)
+                pdf.set_font("Arial", "", 8)
+
+            x, y = x0, pdf.get_y()
+
+            # Fondo alterno
+            fill_color = _BrandedPDF.WHITE if row_idx % 2 == 0 else _BrandedPDF.LGRAY
+            pdf.set_fill_color(*fill_color)
+            pdf.rect(x, y, sum(col_widths), row_h, "F")
+
+            # Texto de cada celda
+            pdf.set_text_color(15, 23, 42)
+            for cw, lines in zip(col_widths, cell_lines):
+                padded = lines + [""] * (max_lines - len(lines))
+                pdf.set_xy(x + 1, y)
+                pdf.multi_cell(cw - 1, line_h, "\n".join(padded),
+                               border=0, fill=False, align="L")
+                x += cw
+
+            # Línea inferior suave
+            pdf.set_draw_color(*_BrandedPDF.ROWBDR)
+            pdf.line(x0, y + row_h, x0 + sum(col_widths), y + row_h)
             pdf.set_y(y + row_h)
-        return bytes(pdf.output(dest='S'))
+
+        # Total de registros
+        pdf.ln(2)
+        pdf.set_font("Arial", "I", 7.5)
+        pdf.set_text_color(*_BrandedPDF.DKGRAY)
+        pdf.cell(0, 5, _safe(f"Total de registros: {len(data)}"), align="R")
+        pdf.set_text_color(0, 0, 0)
+
+        return bytes(pdf.output(dest="S"))
     
     @staticmethod
     def dashboard_pdf_bytes(figures, title="Dashboard CONITEK", kpis: dict | None = None):
+        """PDF de dashboard con diseño institucional: portada con KPIs en tarjetas y
+        una gráfica por página, todo con encabezado y pie de página UNT/CONITEK."""
         os.makedirs(Config.REPORTS_DIR, exist_ok=True)
-        pdf = FPDF(orientation='P', unit='mm', format='A4')
-        pdf.set_auto_page_break(auto=True, margin=15)
+
+        pdf = _BrandedPDF(report_title=title, orientation="P")
         pdf.add_page()
-        pdf.set_font("Arial", 'B', 18)
-        pdf.cell(0, 10, title, ln=True, align='C')
-        pdf.set_font("Arial", size=11)
-        pdf.ln(4)
-        pdf.cell(0, 8, f"Generado: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True)
+
+        # ── Tarjetas de KPIs ────────────────────────────────────────────────
         if kpis:
-            pdf.ln(2)
-            for k, v in kpis.items():
-                pdf.cell(0, 8, f"- {k}: {v}", ln=True)
-        try:
-            import plotly.io as pio
-        except Exception:
-            return bytes(pdf.output(dest='S'))
+            pdf.set_font("Arial", "B", 11)
+            pdf.set_text_color(*_BrandedPDF.NAVY)
+            pdf.cell(0, 8, "Indicadores Clave de Rendimiento", ln=True, align="C")
+            pdf.ln(3)
+
+            kpi_items = list(kpis.items())
+            page_w = pdf.w - pdf.l_margin - pdf.r_margin
+            box_w = (page_w - 6) / 2
+            box_h = 22
+
+            for i, (k, v) in enumerate(kpi_items):
+                col = i % 2
+                if col == 0:
+                    row_y = pdf.get_y()
+                x = pdf.l_margin + col * (box_w + 6)
+
+                # Fondo suave
+                pdf.set_fill_color(238, 244, 255)
+                pdf.rect(x, row_y, box_w, box_h, "F")
+                # Acento navy izquierdo
+                pdf.set_fill_color(*_BrandedPDF.NAVY)
+                pdf.rect(x, row_y, 3.5, box_h, "F")
+                # Valor (grande, navy)
+                pdf.set_xy(x + 5.5, row_y + 2)
+                pdf.set_font("Arial", "B", 17)
+                pdf.set_text_color(*_BrandedPDF.NAVY)
+                pdf.cell(box_w - 7, 12, _safe(str(v)), align="L")
+                # Etiqueta (pequeña, gris)
+                pdf.set_xy(x + 5.5, row_y + 14)
+                pdf.set_font("Arial", "", 8)
+                pdf.set_text_color(*_BrandedPDF.DKGRAY)
+                pdf.cell(box_w - 7, 6, _safe(str(k)), align="L")
+
+                if col == 1:
+                    pdf.set_y(row_y + box_h + 5)
+
+            # Si número impar de KPIs, avanzar
+            if len(kpi_items) % 2 == 1:
+                pdf.set_y(row_y + box_h + 5)
+
+            pdf.set_text_color(0, 0, 0)
+            pdf.ln(4)
+
+        # ── Gráficas (una por página) ────────────────────────────────────────
         tmp_img_paths = []
         for idx, fig in enumerate(figures or []):
             try:
@@ -224,16 +378,13 @@ class ReportService:
                 tmp_img_paths.append(img_path)
             except Exception:
                 continue
+
         for img_path in tmp_img_paths:
             pdf.add_page()
-            page_width = pdf.w - 20
-            pdf.set_font("Arial", 'B', 12)
-            pdf.cell(0, 8, "Gráfico", ln=True)
-            pdf.image(img_path, x=10, y=20, w=page_width)
-            pdf.set_y(280)
-            pdf.set_font("Arial", size=9)
-            pdf.cell(0, 6, f"{Config.CONGRESS_NAME} - {datetime.now().strftime('%Y-%m-%d')}", ln=True, align='R')
-        return bytes(pdf.output(dest='S'))
+            page_width = pdf.w - pdf.l_margin - pdf.r_margin
+            pdf.image(img_path, x=pdf.l_margin, y=32, w=page_width)
+
+        return bytes(pdf.output(dest="S"))
     
     @staticmethod
     def event_attendees_pdf_bytes(event_info: dict, speakers: list[str], audience: list[str]):

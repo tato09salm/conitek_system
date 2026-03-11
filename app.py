@@ -5,6 +5,7 @@ from models.participant import Participant
 from models.event_speaker import EventSpeaker
 from models.paper import Paper
 from components.ui import header
+from services.audit import log_event
 
 # -----------------------------------------------------------------------------
 # CONFIGURACIÓN DE PÁGINA Y ESTILOS (TEMA UNT TRUJILLO)
@@ -223,12 +224,30 @@ if 'user' in st.session_state:
         st.Page("pages/09_Inscripciones.py", title="Inscripciones", icon=":material/assignment_add:"),
         st.Page("pages/08_Usuarios.py", title="Usuarios", icon=":material/manage_accounts:"),
         st.Page("pages/06_Certificados.py", title="Certificados", icon=":material/verified:"),
-        st.Page("pages/00_Logout.py", title="Cerrar Sesión", icon=":material/logout:"),
     ])
+    if role_l in ["admin", "administrador"]:
+        pages.append(st.Page("pages/11_Seguridad.py", title="Seguridad", icon=":material/security:"))
+    pages.append(st.Page("pages/00_Logout.py", title="Cerrar Sesión", icon=":material/logout:"))
 else:
     pages = [
         st.Page("pages/01_Login.py", title="Ingreso", icon=":material/login:"),
     ]
 
 pg = st.navigation(pages)
+
+# Registrar visita al módulo cuando el usuario navega a una página diferente
+if 'user' in st.session_state:
+    _page_title = pg.title
+    if st.session_state.get('_current_page') != _page_title:
+        try:
+            log_event(
+                usuario=st.session_state.get('user'),
+                accion='PAGE_VISIT',
+                tabla='modulo',
+                detalle=_page_title
+            )
+        except Exception:
+            pass
+        st.session_state['_current_page'] = _page_title
+
 pg.run()
