@@ -217,7 +217,6 @@ if 'user' in st.session_state:
     if role_l in ["admin", "administrador", "tesorero", "tesoreria", "tesorería"]:
         pages.append(st.Page("pages/07_Eventos.py", title="Eventos", icon=":material/event:"))
         pages.append(st.Page("pages/07_Evento_Detalle.py", title="Detalle de Evento", icon=":material/description:"))
-        pages.append(st.Page("pages/10_audit.py", title="Auditoría", icon=":material/manage_search:"))
 
     # Resto
     pages.extend([
