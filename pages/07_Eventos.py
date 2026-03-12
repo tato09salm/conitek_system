@@ -10,6 +10,8 @@ from datetime import date
 import pandas as pd
 import uuid
 from components.downloads import export_buttons_df
+from services.statistics_service import StatisticsService
+from components.statistics import render_stats_cards
 
 st.title("Gestión de Eventos")
 # Gate de acceso: solo admin (tolerante si 'user' no es dict)
@@ -54,6 +56,25 @@ with st.expander("Crear Evento"):
             db.close()
             st.success("Evento creado")
             st.rerun()
+
+# -----------------------------------------------------------------------------
+# ESTADÍSTICAS DEL MÓDULO
+# -----------------------------------------------------------------------------
+
+db = SessionLocal()
+stats = StatisticsService.get_event_stats(db)
+db.close()
+
+if stats:
+    st.markdown("### 📊 Estadísticas de Eventos")
+    render_stats_cards([
+        {"label": "Total Eventos", "value": stats["total"], "icon": "📅", "color": "#000080"},
+        {"label": "Capacidad Total", "value": stats["total_capacity"], "icon": "👥", "color": "#1e90ff"},
+        {"label": "Total Ocupados", "value": stats["total_occupied"], "icon": "✅", "color": "#28a745"},
+        {"label": "Capacidad Promedio", "value": stats["avg_capacity"], "icon": "📊", "color": "#ffd700"},
+    ])
+    st.markdown(f"**Evento con mayor ocupación:** {stats['most_occupied']}")
+    st.markdown(f"**Evento con menor ocupación:** {stats['least_occupied']}")
 
 header_l, header_r = st.columns([4, 2])
 with header_l:

@@ -9,10 +9,31 @@ from services.reports import ReportService
 from datetime import date
 import pandas as pd
 import uuid
+from services.statistics_service import StatisticsService
+from components.statistics import render_stats_cards
 
 st.title("Inscripciones")
 
+# -----------------------------------------------------------------------------
+# ESTADÍSTICAS DEL MÓDULO (Solo para roles administrativos)
+# -----------------------------------------------------------------------------
 role = str(st.session_state.get("role") or "").lower()
+if role in ("admin", "administrador", "tesorero", "tesoreria", "tesorería"):
+    db = SessionLocal()
+    stats = StatisticsService.get_registration_stats(db)
+    db.close()
+    
+    if stats:
+        st.markdown("### 📊 Resumen de Inscripciones")
+        render_stats_cards([
+            {"label": "Total Inscripciones", "value": stats["total_registrations"], "icon": "📝", "color": "#000080"},
+            {"label": "Recaudación Total", "value": f"S/. {stats['total_collected']:,.2f}", "icon": "💰", "color": "#28a745"},
+            {"label": "Monto Promedio", "value": f"S/. {stats['avg_payment']:,.2f}", "icon": "📈", "color": "#1e90ff"},
+            {"label": "Monto Máximo", "value": f"S/. {stats['max_payment']:,.2f}", "icon": "🏆", "color": "#ffd700"},
+            {"label": "Confirmadas", "value": stats["by_status"].get("Confirmada", 0), "icon": "✅", "color": "#28a745"},
+            {"label": "Pendientes", "value": stats["by_status"].get("Pendiente", 0), "icon": "⏳", "color": "#fd7e14"},
+        ])
+
 user_val = st.session_state.get("user")
 
 if role in ("admin", "administrador", "tesorero", "tesoreria", "tesorería"):

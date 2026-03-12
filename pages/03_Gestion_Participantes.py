@@ -7,6 +7,8 @@ import pandas as pd
 from components.downloads import export_buttons_df
 import re
 from services.audit import log_event
+from services.statistics_service import StatisticsService
+from components.statistics import render_stats_cards
 
 # -----------------------------------------------------------------------------
 # CONFIGURACIÓN Y ESTILOS
@@ -503,6 +505,26 @@ with st.expander("📤 Registro Masivo (CSV)", expanded=False):
                 
         except Exception as e:
             st.error(f"❌ Error al procesar archivo: {str(e)}")
+
+# -----------------------------------------------------------------------------
+# ESTADÍSTICAS DEL MÓDULO
+# -----------------------------------------------------------------------------
+
+db = SessionLocal()
+stats = StatisticsService.get_participant_stats(db)
+db.close()
+
+if stats:
+    st.markdown("### 📊 Estadísticas de Participantes")
+    render_stats_cards([
+        {"label": "Total Participantes", "value": stats["total"], "icon": "👥", "color": COLORS["navy"]},
+        {"label": "Estudiantes", "value": stats["by_type"].get("Estudiante", 0), "icon": "🎓", "color": COLORS["blue"]},
+        {"label": "Profesionales", "value": stats["by_type"].get("Profesional", 0), "icon": "💼", "color": COLORS["green"]},
+        {"label": "Ponentes", "value": stats["by_type"].get("Ponente", 0), "icon": "🎤", "color": COLORS["gold"]},
+        {"label": "Presencial", "value": stats["by_modality"].get("Presencial", 0), "icon": "🏛️", "color": COLORS["navy"]},
+        {"label": "Virtual", "value": stats["by_modality"].get("Virtual", 0), "icon": "💻", "color": COLORS["blue"]},
+    ])
+    st.markdown(f"**Institución más frecuente:** {stats['top_university']}")
 
 # -----------------------------------------------------------------------------
 # LISTADO DE PARTICIPANTES

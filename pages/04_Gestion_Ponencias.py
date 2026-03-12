@@ -10,6 +10,8 @@ from components.downloads import export_buttons_df
 import os
 from config import Config
 from services.audit import log_event
+from services.statistics_service import StatisticsService
+from components.statistics import render_stats_cards
 
 # -----------------------------------------------------------------------------
 # CONFIGURACIÓN
@@ -458,6 +460,25 @@ if role in ("Admin", "Evaluador"):
                     db.close()
                     st.success("✅ Ponencia registrada exitosamente")
                     st.rerun()
+
+# -----------------------------------------------------------------------------
+# ESTADÍSTICAS DEL MÓDULO
+# -----------------------------------------------------------------------------
+
+db = SessionLocal()
+stats = StatisticsService.get_paper_stats(db)
+db.close()
+
+if stats:
+    st.markdown("### 📊 Estadísticas de Ponencias")
+    render_stats_cards([
+        {"label": "Total Ponencias", "value": stats["total"], "icon": "📄", "color": COLORS["navy"]},
+        {"label": "Enviado", "value": stats["by_status"].get("Enviado", 0), "icon": "📤", "color": COLORS["orange"]},
+        {"label": "Aceptado", "value": stats["by_status"].get("Aceptado", 0), "icon": "✅", "color": COLORS["green"]},
+        {"label": "Rechazado", "value": stats["by_status"].get("Rechazado", 0), "icon": "❌", "color": COLORS["red"]},
+        {"label": "Puntaje Promedio", "value": stats["avg_score"], "icon": "⭐", "color": COLORS["blue"]},
+        {"label": "Puntaje Máximo", "value": stats["max_score"], "icon": "🏆", "color": COLORS["gold"]},
+    ])
 
 # -----------------------------------------------------------------------------
 # LISTADO CON TABLA CRUD PERSONALIZADA
